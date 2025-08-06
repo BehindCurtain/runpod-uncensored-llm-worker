@@ -1,8 +1,10 @@
+# RunPod Uncensored LLM Worker
+
 ![RunPod Worker Template](https://cpjrphpz3t5wbwfe.public.blob.vercel-storage.com/worker-template_banner-zUuCAjwDuvfsINR6vKBhYvvm3TnZFB.jpeg)
 
 ---
 
-This repository serves as a starting point for creating your own custom RunPod Serverless worker. It provides a basic structure and configuration that you can build upon.
+Bu proje, RunPod Serverless platformunda çalışan özelleştirilmiş bir LLM (Large Language Model) worker'ıdır. Uncensored (sansürsüz) LLM modellerini serverless ortamda çalıştırarak API üzerinden erişilebilir hale getirir.
 
 ---
 
@@ -10,56 +12,185 @@ This repository serves as a starting point for creating your own custom RunPod S
 
 ---
 
-## Getting Started
+## Özellikler
 
-1.  **Use this template:** Create a new repository based on this template or clone it directly.
-2.  **Customize:** Modify the code and configuration files to implement your specific task.
-3.  **Test:** Run your worker locally to ensure it functions correctly.
-4.  **Deploy:** Connect your repository to RunPod or build and push the Docker image manually.
+- **Otomatik Model İndirme**: Hugging Face Hub'dan model dosyalarını otomatik indirir
+- **Network Volume Cache**: Model dosyalarını network volume'da cache'ler
+- **GPU Acceleration**: CUDA destekli hızlı inference
+- **Chat & Text Completion**: Hem chat hem de text completion modları
+- **Configurable Parameters**: Esnek inference parametreleri
+- **Error Handling**: Kapsamlı hata yönetimi ve logging
 
-## Customizing Your Worker
+## Desteklenen Model
 
-- **`handler.py`:** This is the core of your worker.
-  - The `handler(event)` function is the entry point executed for each job.
-  - The `event` dictionary contains the job input under the `"input"` key.
-  - Modify this function to load your models, process the input and return the desired output.
-  - Consider implementing model loading outside the handler (e.g., globally or in an initialization function) if models are large and reused across jobs.
-- **`requirements.txt`:** Add any Python libraries your worker needs to this file. These will be installed via `uv` when the Docker image is built.
-- **`Dockerfile`:**
-  - This file defines the Docker image for your worker.
-  - It starts from a [RunPod base image (`runpod/base`)](https://github.com/runpod/containers/tree/main/official-templates/base) which includes CUDA, mulitple versions of python, uv, jupyter notebook and common dependencies.
-  - It installs dependencies from `requirements.txt` using `uv`.
-  - It copies your `src` directory into the image.
-  - You might need to add system dependencies (`apt-get install ...`), environment variables (`ENV`), or other setup steps here if required by your specific application.
-- **`test_input.json`:** Modify this file to provide relevant sample input for local testing.
+Bu worker şu anda aşağıdaki modeli desteklemektedir:
+- **Model**: Llama-3.2-8X3B-MOE-Dark-Champion-Instruct-uncensored-abliterated-18.4B
+- **Format**: GGUF (Q8_0 quantization)
+- **Boyut**: ~18.4B parametreler
 
-## Testing Locally
+## Kurulum ve Deployment
 
-You can test your handler logic locally using the RunPod Python SDK. For detailed steps on setting up your local environment (creating a virtual environment, installing dependencies) and running the handler, please refer to the [RunPod Serverless Get Started Guide](https://docs.runpod.io/serverless/get-started).
+### 1. Environment Variables
 
-1.  **Prepare Input:** Modify `test_input.json` with relevant sample input for your handler.
-2.  **Run the Handler:**
-    ```bash
-    python handler.py
-    ```
-    This will execute your `handler` function with the contents of [`test_input.json`](/test_input.json) as input.
+Aşağıdaki environment variable'ları ayarlayabilirsiniz:
 
-## Deploying to RunPod
+```bash
+# Model Configuration
+MODEL_REPOSITORY_ID="DavidAU/Llama-3.2-8X3B-MOE-Dark-Champion-Instruct-uncensored-abliterated-18.4B-GGUF"
+MODEL_FILENAME="L3.2-8X3B-MOE-Dark-Champion-Inst-18.4B-uncen-ablit_D_AU-Q8_0.gguf"
+MODEL_CACHE_DIR="/runpod-volume"
 
-There are two main ways to deploy your worker:
+# Model Parameters
+N_GPU_LAYERS=-1
+N_CTX=4096
+N_BATCH=512
 
-1.  **GitHub Integration (Recommended):**
+# Inference Defaults
+MAX_TOKENS=512
+TEMPERATURE=0.7
+TOP_P=0.9
+TOP_K=40
+REPEAT_PENALTY=1.1
 
-    - Connect your GitHub repository to RunPod Serverless. RunPod will automatically build and deploy your worker whenever you push changes to your specified branch.
-    - For detailed instructions on setting up the GitHub integration, authorizing RunPod, and configuring your deployment, please refer to the [RunPod Deploy with GitHub Guide](https://docs.runpod.io/serverless/github-integration).
+# Optional
+HF_TOKEN="your_huggingface_token"
+LOG_LEVEL="INFO"
+```
 
-2.  **Manual Docker Build & Push:**
-    - For detailed instructions on building the Docker image locally and pushing it to a container registry, please see the [RunPod Serverless Get Started Guide](https://docs.runpod.io/serverless/get-started#step-6-build-and-push-your-docker-image).
-    - Once pushed, create a new Template or Endpoint in the RunPod Serverless UI and point it to the image in your container registry.
+### 2. Network Volume
 
-## Further Information
+RunPod'da bir network volume oluşturun ve `/runpod-volume` path'ine mount edin. Model dosyaları bu volume'da cache'lenecektir.
 
-- [RunPod Serverless Documentation](https://docs.runpod.io/serverless/overview)
-- [Python SDK](https://github.com/runpod/runpod-python)
-- [Base Docker Images](https://github.com/runpod/containers/tree/main/official-templates/base)
-- [Community Discord](https://discord.gg/cUpRmau42Vd)
+### 3. GitHub Integration ile Deploy
+
+1. Bu repository'yi fork edin veya clone edin
+2. RunPod Console'da yeni bir Serverless Endpoint oluşturun
+3. GitHub integration'ı kullanarak repository'nizi bağlayın
+4. Network volume'ı endpoint'e attach edin
+
+### 4. Manuel Docker Build
+
+```bash
+docker build -t your-registry/llm-worker .
+docker push your-registry/llm-worker
+```
+
+## API Kullanımı
+
+### Text Completion
+
+```json
+{
+  "input": {
+    "prompt": "What is the meaning of life?",
+    "max_tokens": 256,
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "top_k": 40
+  }
+}
+```
+
+### Chat Completion
+
+```json
+{
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are a helpful AI assistant."
+      },
+      {
+        "role": "user",
+        "content": "Explain quantum computing in simple terms."
+      }
+    ],
+    "max_tokens": 512,
+    "temperature": 0.7,
+    "top_p": 0.9
+  }
+}
+```
+
+### Response Format
+
+```json
+{
+  "generated_text": "Generated response text...",
+  "usage": {
+    "prompt_tokens": 15,
+    "completion_tokens": 128,
+    "total_tokens": 143
+  },
+  "finish_reason": "stop",
+  "generation_time": 2.345,
+  "status": "success"
+}
+```
+
+## Parametreler
+
+| Parametre | Tip | Varsayılan | Açıklama |
+|-----------|-----|------------|----------|
+| `prompt` | string | - | Text completion için prompt |
+| `messages` | array | - | Chat completion için mesaj listesi |
+| `max_tokens` | integer | 512 | Maksimum token sayısı |
+| `temperature` | float | 0.7 | Yaratıcılık seviyesi (0.0-2.0) |
+| `top_p` | float | 0.9 | Nucleus sampling (0.0-1.0) |
+| `top_k` | integer | 40 | Top-k sampling |
+| `repeat_penalty` | float | 1.1 | Tekrar cezası |
+| `stop` | array | ["</s>", "<\|im_end\|>"] | Durma token'ları |
+
+## Local Testing
+
+```bash
+# Test input ile
+python handler.py
+
+# Chat completion test ile
+cp test_chat_input.json test_input.json
+python handler.py
+```
+
+## Proje Yapısı
+
+```
+├── docs/                    # Dokümantasyon
+├── config.py               # Konfigürasyon yönetimi
+├── cache_manager.py        # Cache yönetimi
+├── model_manager.py        # Model indirme ve yükleme
+├── inference_engine.py     # LLM inference
+├── handler.py              # Ana RunPod handler
+├── requirements.txt        # Python bağımlılıkları
+├── Dockerfile             # Container tanımı
+├── test_input.json        # Test verisi
+└── test_chat_input.json   # Chat test verisi
+```
+
+## Known Issues
+
+- İlk çalıştırmada model indirme süresi uzun olabilir (~18GB dosya)
+- GPU memory yetersizse model yükleme başarısız olabilir
+- Network volume mount edilmemişse cache çalışmaz
+
+## Troubleshooting
+
+### Model İndirme Sorunları
+- Network volume'ın doğru mount edildiğini kontrol edin
+- HF_TOKEN environment variable'ını ayarlayın (private model'ler için)
+- Disk alanının yeterli olduğunu kontrol edin
+
+### Memory Sorunları
+- N_GPU_LAYERS değerini azaltın
+- Daha küçük context window (N_CTX) kullanın
+- Batch size'ı (N_BATCH) azaltın
+
+### Performance Optimizasyonu
+- Model cache'lendiğinde cold start süreleri azalır
+- GPU instance'ları CPU instance'larından çok daha hızlıdır
+- Network volume SSD kullanın
+
+## Lisans
+
+Bu proje MIT lisansı altında lisanslanmıştır.
